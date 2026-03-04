@@ -1,0 +1,274 @@
+<!DOCTYPE html>
+<html lang="sl">
+<head>
+    <meta charset="UTF-8">
+	<link rel="stylesheet" href="style.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Lokostrelski Master: Labirint</title>
+ 
+        
+    
+</head>
+<body>
+
+<div class="game-container">
+    <div class="game-info">
+        <span>Lokostrelec Master 🏹</span>
+        <span id="streak-label">Streak: 0 🎯</span>
+    </div>
+
+    <div id="victory-screen">
+        <h2>V POLNO! 🎯</h2>
+        <p>Pripravljam novo tarčo...</p>
+    </div>
+
+    <svg id="gameCanvas" width="480" height="480">
+        <text id="exit" dominant-baseline="central" text-anchor="middle">🎯</text>
+        <text id="player" dominant-baseline="central" text-anchor="middle" style="font-weight: bold;">🏹</text>
+    </svg>
+
+    <div class="controls">
+        <select id="difficulty" onchange="changeSize(this.value)">
+            <option value="12">Enostavno</option>
+            <option value="20" selected>Srednje</option>
+            <option value="30">Težko</option>
+        </select>
+        <button class="accent" onclick="generateMaze()">Nova tarča</button>
+        <button onclick="showPath()">Pokaži pot</button>
+        <button onclick="startAutopilot()">Avtopilot</button>
+    </div>
+</div>
+
+<script>
+const svg = document.getElementById('gameCanvas');
+const player = document.getElementById('player');
+const exit = document.getElementById('exit');
+const victoryScreen = document.getElementById('victory-screen');
+const streakLabel = document.getElementById('streak-label');
+
+let grid = [], lastGrid = null;
+let gridSize = 20; 
+let cellSize, posX, posY, streak = 0;
+let isAutopilot = false, isWinning = false;
+const keys = {}, step = 2.8;
+
+window.addEventListener('keydown', e => { 
+    keys[e.key.toLowerCase()] = true; 
+    if (isAutopilot) stopAutopilot(); 
+});
+window.addEventListener('keyup', e => keys[e.key.toLowerCase()] = false);
+
+function stopAutopilot() {
+    isAutopilot = false;
+    player.style.filter = "none";
+}
+
+function changeSize(newSize) {
+    gridSize = parseInt(newSize);
+    streak = 0;
+    updateStreak();
+    generateMaze();
+}
+
+function updateStreak() {
+    streakLabel.innerText = `Streak: ${streak} 🎯`;
+}
+
+function generateMaze() {
+    isWinning = false;
+    isAutopilot = false;
+    victoryScreen.style.display = 'none';
+    
+    const oldPath = document.getElementById('solution-path');
+    if (oldPath) oldPath.remove();
+    svg.querySelectorAll('line').forEach(l => l.remove());
+    
+    cellSize = 480 / gridSize;
+    grid = Array.from({ length: gridSize }, (_, r) => 
+        Array.from({ length: gridSize }, (_, c) => ({
+            r, c, visited: false, walls: [true, true, true, true]
+        }))
+    );
+
+    let stack = [];
+    let current = grid[0][0];
+    current.visited = true;
+
+    while (true) {
+        let neighbors = getUnvisited(current);
+        if (neighbors.length > 0) {
+            let next = neighbors[Math.floor(Math.random() * neighbors.length)];
+            removeWalls(current, next);
+            stack.push(current);
+            current = next;
+            current.visited = true;
+        } else if (stack.length > 0) {
+            current = stack.pop();
+        } else { break; }
+    }
+
+    lastGrid = grid;
+    drawMaze();
+    
+    exit.style.fontSize = `${cellSize * 0.8}px`;
+    exit.setAttribute('x', (gridSize - 1) * cellSize + cellSize/2);
+    exit.setAttribute('y', (gridSize - 1) * cellSize + cellSize/2);
+
+    resetPlayer();
+}
+
+function getUnvisited(c) {
+    let n = [];
+    if (c.r > 0 && !grid[c.r-1][c.c].visited) n.push(grid[c.r-1][c.c]);
+    if (c.r < gridSize-1 && !grid[c.r+1][c.c].visited) n.push(grid[c.r+1][c.c]);
+    if (c.c > 0 && !grid[c.r][c.c-1].visited) n.push(grid[c.r][c.c-1]);
+    if (c.c < gridSize-1 && !grid[c.r][c.c+1].visited) n.push(grid[c.r][c.c+1]);
+    return n;
+}
+
+function removeWalls(a, b) {
+    if (a.r > b.r) { a.walls[0] = false; b.walls[2] = false; }
+    else if (a.r < b.r) { a.walls[2] = false; b.walls[0] = false; }
+    else if (a.c > b.c) { a.walls[3] = false; b.walls[1] = false; }
+    else if (a.c < b.c) { a.walls[1] = false; b.walls[3] = false; }
+}
+
+function drawMaze() {
+    grid.forEach(row => row.forEach(c => {
+        let x = c.c * cellSize, y = c.r * cellSize;
+        if (c.walls[0]) createLine(x, y, x + cellSize, y);
+        if (c.walls[1]) createLine(x + cellSize, y, x + cellSize, y + cellSize);
+        if (c.walls[2]) createLine(x, y + cellSize, x + cellSize, y + cellSize);
+        if (c.walls[3]) createLine(x, y, x, y + cellSize);
+    }));
+}
+
+function createLine(x1, y1, x2, y2) {
+    const l = document.createElementNS("http://www.w3.org/2000/svg", "line");
+    l.setAttribute("x1", x1); l.setAttribute("y1", y1);
+    l.setAttribute("x2", x2); l.setAttribute("y2", y2);
+    l.setAttribute("stroke", "black"); l.setAttribute("stroke-width", "2");
+    svg.appendChild(l);
+}
+
+function resetPlayer() {
+    posX = cellSize / 2; posY = cellSize / 2;
+    player.style.fontSize = `${cellSize * 0.7}px`;
+    player.setAttribute('x', posX); player.setAttribute('y', posY);
+    player.style.filter = "none";
+}
+
+function update() {
+    if (!isAutopilot && !isWinning) {
+        let mx = 0, my = 0;
+        if (keys['w'] || keys['arrowup']) my -= step;
+        if (keys['s'] || keys['arrowdown']) my += step;
+        if (keys['a'] || keys['arrowleft']) mx -= step;
+        if (keys['d'] || keys['arrowright']) mx += step;
+
+        const walls = svg.querySelectorAll('line');
+        const r = cellSize / 3.5;
+
+        if (mx !== 0) {
+            if (!checkCollision(posX + mx, posY, walls, r)) posX += mx;
+        }
+        if (my !== 0) {
+            if (!checkCollision(posX, posY + my, walls, r)) posY += my;
+        }
+
+        player.setAttribute('x', posX);
+        player.setAttribute('y', posY);
+        checkWin();
+    }
+    requestAnimationFrame(update);
+}
+
+function checkCollision(nx, ny, walls, r) {
+    for (let l of walls) {
+        if (lineCircleCollide(nx, ny, +l.getAttribute('x1'), +l.getAttribute('y1'), +l.getAttribute('x2'), +l.getAttribute('y2'), r)) return true;
+    }
+    return false;
+}
+
+function lineCircleCollide(px, py, x1, y1, x2, y2, r) {
+    const l2 = (x2-x1)**2 + (y2-y1)**2;
+    if (l2 === 0) return false;
+    let t = ((px-x1)*(x2-x1) + (py-y1)*(y2-y1)) / l2;
+    t = Math.max(0, Math.min(1, t));
+    const d = Math.sqrt((px - (x1 + t*(x2-x1)))**2 + (py - (y1 + t*(y2-y1)))**2);
+    return d < r + 1;
+}
+
+function checkWin() {
+    if (isWinning) return;
+    const target = (gridSize - 1) * cellSize + cellSize / 2;
+    if (Math.abs(posX - target) < cellSize/2 && Math.abs(posY - target) < cellSize/2) {
+        isWinning = true;
+        isAutopilot = false;
+        streak++;
+        updateStreak();
+        victoryScreen.style.display = 'flex';
+        setTimeout(generateMaze, 1500);
+    }
+}
+
+// --- AVTOPILOT IN POT ---
+function calculatePath() {
+    let q = [{ r: 0, c: 0, p: [[0, 0]] }], v = new Set(["0,0"]);
+    while (q.length > 0) {
+        let { r, c, p } = q.shift();
+        if (r === gridSize - 1 && c === gridSize - 1) return p;
+        let dirs = [{dr:-1,dc:0,w:0}, {dr:0,dc:1,w:1}, {dr:1,dc:0,w:2}, {dr:0,dc:-1,w:3}];
+        for (let d of dirs) {
+            let nr = r + d.dr, nc = c + d.dc;
+            if (nr >= 0 && nr < gridSize && nc >= 0 && nc < gridSize && !lastGrid[r][c].walls[d.w] && !v.has(`${nr},${nc}`)) {
+                v.add(`${nr},${nc}`);
+                q.push({ r: nr, c: nc, p: [...p, [nr, nc]] });
+            }
+        }
+    }
+    return null;
+}
+
+function startAutopilot() {
+    if (isAutopilot) return;
+    const path = calculatePath();
+    if (!path) return;
+    isAutopilot = true;
+    player.style.filter = "drop-shadow(0 0 5px gold)";
+    let currentStep = 0;
+    function move() {
+        if (!isAutopilot) return;
+        if (currentStep >= path.length) { checkWin(); return; }
+        const tx = path[currentStep][1] * cellSize + cellSize / 2;
+        const ty = path[currentStep][0] * cellSize + cellSize / 2;
+        const dx = tx - posX, dy = ty - posY, dist = Math.sqrt(dx*dx + dy*dy);
+        if (dist < 3) currentStep++;
+        else {
+            posX += (dx / dist) * 4; posY += (dy / dist) * 4;
+            player.setAttribute('x', posX); player.setAttribute('y', posY);
+        }
+        requestAnimationFrame(move);
+    }
+    move();
+}
+
+function showPath() {
+    const old = document.getElementById('solution-path');
+    if (old) { old.remove(); return; }
+    const path = calculatePath();
+    const poly = document.createElementNS("http://www.w3.org/2000/svg", "polyline");
+    poly.setAttribute("points", path.map(p => `${p[1] * cellSize + cellSize / 2},${p[0] * cellSize + cellSize / 2}`).join(" "));
+    poly.setAttribute("id", "solution-path");
+    poly.setAttribute("stroke", "rgba(211, 47, 47, 0.3)");
+    poly.setAttribute("stroke-width", cellSize / 4);
+    poly.setAttribute("fill", "none");
+    svg.insertBefore(poly, exit);
+}
+
+generateMaze();
+update();
+</script>
+
+</body>
+</html>

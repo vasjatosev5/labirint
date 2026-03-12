@@ -22,7 +22,7 @@
         <p>Pripravljam novo tarčo...</p>
     </div>
 
-    <svg id="gameCanvas" width="480" height="480">
+    <svg id="gameCanvas" viewBox="0 0 480 480" preserveAspectRatio="xMidYMid meet">
         <text id="exit" dominant-baseline="central" text-anchor="middle">🎯</text>
         <text id="player" dominant-baseline="central" text-anchor="middle" style="font-weight: bold;">🏹</text>
     </svg>
@@ -37,6 +37,9 @@
         <button onclick="showPath()">Pokaži pot</button>
         <button onclick="startAutopilot()">Avtopilot</button>
     </div>
+	<div class="credits">
+		Made by <b>Vasja Tošev</b> – 4.RA
+	</div>
 </div>
 
 <script>
